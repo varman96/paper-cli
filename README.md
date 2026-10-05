@@ -2,7 +2,7 @@
 
 Paper captures command failures in a structured Incident Report for coding-agent investigation.
 
-[GitHub](https://github.com/varman96/paper) · [npm](https://www.npmjs.com/package/@varman96/paper)
+[GitHub](https://github.com/varman96/paper-cli) · [npm](https://www.npmjs.com/package/@varman96/paper)
 
 Primary workflow: Run your command normally. If it fails, run Paper.
 
