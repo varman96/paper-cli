@@ -1,0 +1,21 @@
+{
+  "name": "paper-public",
+  "private": true,
+  "description": "Public companion repository for @varman96/paper, a local CLI for capturing command failures for coding-agent investigation.",
+  "homepage": "https://www.npmjs.com/package/@varman96/paper",
+  "keywords": [
+    "debugging",
+    "cli",
+    "developer-tools",
+    "coding-agents",
+    "ai-coding",
+    "incident-report",
+    "terminal",
+    "error-logs",
+    "claude-code",
+    "cursor",
+    "codex"
+  ],
+  "license": "SEE LICENSE IN LICENSE",
+  "dependencies": {}
+}
