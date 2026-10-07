@@ -1,6 +1,8 @@
 # Paper
 
-Paper captures command failures in a structured Incident Report for coding-agent investigation.
+Paper captures command failures locally in a structured Incident Report for coding-agent investigation.
+
+Local-first. No telemetry.
 
 [GitHub](https://github.com/varman96/paper-cli) · [npm](https://www.npmjs.com/package/@varman96/paper)
 
@@ -110,6 +112,10 @@ Paper is used after a command has failed. `paper run <command>` executes the tar
 
 If the target succeeds, `.paper/incident_report.md` is unchanged. If it exits nonzero or is terminated by a signal, Paper traps that failure, captures the evidence locally, writes a structured Incident Report to `.paper/incident_report.md`, and prints `COMMAND FAILED`. The report contains the command, exit code, working directory, timestamp, and stderr or stack trace. Once the report is persisted, Paper exits successfully; Paper-owned failures, such as inability to update instructions or write the report, exit nonzero.
 
+`.paper/latest.json` is the complete incident artifact: structured fields (command, args, exit code, signal, working directory, ISO timestamp, full stderr or its last 200KB with `"truncated": true`, and the last 50 lines of stdout) plus the full markdown report in the `"incident_report"` field. Any agent, script, or MCP can consume the failure from this one file without parsing prose.
+
+The managed instruction directs agents to read `.paper/latest.json` when `COMMAND FAILED` appears, because their tool output may be truncated.
+
 The Paper instruction tells coding agents where to find the Incident Report, so an agent can investigate the failure without the user manually copying terminal output. Paper does not diagnose or fix the failure.
 
 Paper creates persistent local context and makes it discoverable to the agent. Its operation is local-only and air-gapped: there are no model API calls, telemetry, or command-output uploads.
@@ -122,7 +128,7 @@ Once the incident is resolved, remove it from the active workspace with:
 paper shelf
 ```
 
-Paper moves `.paper/incident_report.md` out of the repository with a rename and prints the stored path. On Windows, shelved reports are stored under `%LOCALAPPDATA%\Paper\shelf\<repository-hash>\`; on other platforms, under `$XDG_DATA_HOME/Paper/shelf/<repository-hash>/` or `~/.local/share/Paper/shelf/<repository-hash>/`. The report is preserved as a timestamped `.md` file under a repository-specific 16-character SHA-256 directory, but is no longer the active report. The active report is removed from `.paper`, its contents are preserved, and the instruction file is not changed. With no active report, or if the move fails, Paper exits nonzero; a failed move preserves the active report.
+Paper moves `.paper/incident_report.md` out of the repository with a rename and prints the stored path. On Windows, shelved reports are stored under `%LOCALAPPDATA%\Paper\shelf\<repository-hash>\`; on other platforms, under `$XDG_DATA_HOME/Paper/shelf/<repository-hash>/` or `~/.local/share/Paper/shelf/<repository-hash>/`. The report is preserved as a timestamped `.md` file under a repository-specific 16-character SHA-256 directory, but is no longer the active report. The active report is removed from `.paper`, its contents are preserved, and the instruction file is not changed. `paper shelf` removes `.paper/latest.json` rather than archiving it: the shelf holds `.md` reports only, and a leftover JSON would describe the wrong incident. With no active report, or if the move fails, Paper exits nonzero; a failed move preserves the active report.
 
 ### Recovering a shelved incident
 
