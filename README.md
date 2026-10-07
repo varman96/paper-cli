@@ -8,8 +8,8 @@ Local-first. No telemetry.
 
 Demo Links: 
 ### Demos
-* [Cursor Demo (23s)](https://github.com/user-attachments/assets/4d15b1f9-b83e-4a78-bcd0-b84bf30f11b4)
-* [Codex Demo (20s)](https://github.com/user-attachments/assets/fe9ab05c-a724-4c10-a16d-bb65ede05c21)
+* [Codex Demo (23s)](https://github.com/user-attachments/assets/4d15b1f9-b83e-4a78-bcd0-b84bf30f11b4)
+* [Cursor Demo (20s)](https://github.com/user-attachments/assets/fe9ab05c-a724-4c10-a16d-bb65ede05c21)
 
 
 Primary workflow: Run your command normally. If it fails, run Paper.
