@@ -68,7 +68,8 @@ produced by the wrapper at the OS boundary, outside the agent's control.
 This matters: October 2026 research on agent security (Adversa's agent
 vulnerability roundup) documents that coding agents can delete or tamper
 with their own execution traces without monitors noticing — logs the agent
-can write are not evidence. Paper's log is one the agent cannot reach.
+can write are not evidence."Paper's log is produced entirely out-of-band, so the 
+agent cannot tamper with it through prompt manipulation or context pollution.
 
 ## Reporting a vulnerability
 
