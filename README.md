@@ -6,6 +6,9 @@ Local-first. No telemetry.
 
 [GitHub](https://github.com/varman96/paper-cli) · [npm](https://www.npmjs.com/package/@varman96/paper)
 
+Demo Links: https://github.com/user-attachments/assets/4d15b1f9-b83e-4a78-bcd0-b84bf30f11b4
+
+
 Primary workflow: Run your command normally. If it fails, run Paper.
 
 ## Install
