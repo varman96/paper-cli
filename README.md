@@ -5,6 +5,7 @@ Paper captures command failures locally in a structured Incident Report for codi
 Local-first. No telemetry.
 
 [GitHub](https://github.com/varman96/paper-cli) · [npm](https://www.npmjs.com/package/@varman96/paper)
+[![Security Audit](https://github.com/varman96/paper/actions/workflows/audit.yml/badge.svg)](https://github.com/varman96/paper/actions/workflows/audit.yml)
 
 Demo Links: 
 ### Demos
