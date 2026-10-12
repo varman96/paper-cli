@@ -38,7 +38,8 @@ the controls below are for.
   tokens, bearer/api_key assignments, private key blocks, credentialed
   connection strings, webhook URLs) with `[REDACTED:<label>]` before
   anything is written. Deterministic, offline, off unless you ask — and
-  pattern-based, not exhaustive.
+  pattern-based, not exhaustive. Incident reports are written with default
+  file permissions; on shared machines, prefer `--redact`.
 
 ## Verifiable claims
 
@@ -78,14 +79,18 @@ Everything Paper does happens on your machine:
   (append-only): timestamp, command, exit code, receipt hash, and flags.
   Each entry carries an HMAC of the previous entry's hash — a hash chain.
   `paper verify --chain` checks the whole sequence and reports the first
-  break index. Appending is best-effort and never fails a run.
+  break index. Appending is best-effort and never fails a run. Shelving a
+  report does not remove its history entry — the audit trail survives
+  `paper shelf`.
 
 - The receipt key lives at `<data dir>/receipt.key` (32 random bytes,
   mode `0600`, created on first capture): `%LOCALAPPDATA%\receipt.key`
   on Windows, `~/.local/share/Paper/receipt.key` (or `$XDG_DATA_HOME`)
   elsewhere. It is machine-local: receipts do not verify on other
   machines, and losing the key orphans old receipts (`paper verify`
-  reports `KEY MISSING`, distinctly from tampering).
+  reports `KEY MISSING`, distinctly from tampering). On Windows, Node
+  cannot set POSIX-style permissions, so the `0600` mode is best-effort
+  there.
 
 - `paper run --fence` (opt-in) creates a git worktree at
   `.paper/scratch` on failure so agents diagnose off the main tree;
@@ -101,6 +106,18 @@ Everything Paper does happens on your machine:
   find the report. This is local file I/O only.
 
 No step in this flow opens a socket.
+
+## Filesystem behavior
+
+- Paper refuses to write through symbolic links. If `.paper`, the report
+  path, or an instruction file resolves to a symlink, Paper aborts rather
+  than following it.
+- `.paper/latest.json` is written atomically (temp file + rename), so a
+  crash mid-write cannot leave a half-written artifact that `paper verify`
+  would then bless.
+- The managed instruction block only ever touches its own fenced section
+  (`<!-- paper:start -->` … `<!-- paper:end -->`) in your agent-instruction
+  files. Everything outside the fence is left byte-identical.
 
 ## Evidence integrity
 
@@ -121,6 +138,12 @@ on — so receipts are HMAC-SHA256 under a machine-local key the agent
 doesn't have. Forging a valid receipt requires the key, which lives
 outside the repo workspace. The per-field hashes mean verification doesn't
 just say "tampered," it says what: `stderr was modified after capture`.
+
+The receipt seals the redacted output, not the raw capture: when
+`--redact` is on, the HMAC covers exactly what was stored — which is what
+the agent ingested. An auditor can therefore prove the agent only ever saw
+the scrubbed version. That is the whole blame-limiting story in one
+property.
 
 Stated plainly, the limits: a sufficiently motivated process with shell
 access could go key-hunting outside the workspace — the bar is "deliberate
@@ -148,3 +171,4 @@ network primitives; all imports are `node:` builtins (`child_process`,
 `package.json`. Bundle ~25 KB.*
 
 *Re-audit on each release with the command above.*
+
