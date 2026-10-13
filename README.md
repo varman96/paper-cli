@@ -81,10 +81,10 @@ If the command works, you're done.
 
 - `paper shelf` — move the active Incident Report out of the workspace and preserve it in Paper's local shelf.
 
-- paper verify — check the HMAC receipt in .paper/latest.json. Prints RECEIPT OK, or RECEIPT TAMPERED
+-  `paper verify` — check the HMAC receipt in .paper/latest.json. Prints RECEIPT OK, or RECEIPT TAMPERED
   (naming each altered field, e.g. stderr was modified after capture), or KEY MISSING. Exits 1 on failure.
 
-- paper verify --chain — walk .paper/history.jsonl and verify every link and HMAC. 
+-  `paper verify --chain` — walk .paper/history.jsonl and verify every link and HMAC. 
   Prints CHAIN OK (n entries) or the first broken entry index. Exits 1 on failure.
 
 - `paper --help` — print Paper's usage, examples, report location, shelf command, and metadata flags.
