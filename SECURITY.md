@@ -57,14 +57,16 @@ Security review for Paper is a ten-minute exercise:
   (dev-only tooling: esbuild, wrangler, biome). There is no transitive
   dependency tree to audit or poison.
 
-3. **Small binary.** The shipped bundle is ~25 KB. You can read all of it.
+3. **Small binary.** The shipped bundle is ~27 KB. You can read all of it.
 
 4. **Receipt verification.** Every capture is sealed with an HMAC-SHA256
   receipt under a machine-local key. `paper verify` recomputes the
   per-field hashes and the HMAC from `.paper/latest.json` and either
   prints `RECEIPT OK` or names exactly what changed
   (`stderr was modified after capture`). Try it: edit the stored
-  `stderr` yourself and run `paper verify`.
+  `stderr` yourself and run `paper verify`. The per-field hashes also cover
+  `signal`, `signal_code`, and `probable_cause`, so signal tampering is
+  named by `paper verify` like any other field.
 
 ## Data flow
 
@@ -169,6 +171,9 @@ review — zero matches for `fetch`, `XMLHttpRequest`, `WebSocket`,
 network primitives; all imports are `node:` builtins (`child_process`,
 `crypto`, `fs`, `os`, `path`, `url`); zero runtime dependencies in
 `package.json`. Bundle ~25 KB.*
+- *v1.0.16 (2026-10-13): bundle re-audited — zero matches for the same
+network primitives; signal fields (`signal`, `signal_code`,
+`probable_cause`) added to receipt coverage. Bundle ~27 KB.*
 
 *Re-audit on each release with the command above.*
 

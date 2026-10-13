@@ -130,6 +130,8 @@ If the target succeeds, `.paper/incident_report.md` is unchanged. If it exits no
 
 `.paper/latest.json` is the complete incident artifact: structured fields (command, args, exit code, signal, working directory, ISO timestamp, full stderr or its last 200KB with `"truncated": true`, and the last 50 lines of stdout) plus the full markdown report in the `"incident_report"` field. Any agent, script, or MCP can consume the failure from this one file without parsing prose.
 
+Signal-aware exit reporting (v1.0.16) adds three fields to `latest.json` and `history.jsonl`: `signal` (the OS-reported name, e.g. `SIGKILL`), `signal_code` (the conventional 128+N, e.g. `137`), and `probable_cause` (a fixed one-line hint, or `null` for signals without one). All three are `null` on a normal exit, and when the child dies by signal, `exit_code` is `null`. The receipt's per-field hashes cover all three, so `paper verify` names them if altered, and the report's Evidence section shows them and flags captured output as partial. Paper only records what the OS reports without privilege: no dmesg, no /proc, no env scraping, no core dump parsing.
+
 The managed instruction directs agents to read `.paper/latest.json` when `COMMAND FAILED` appears, because their tool output may be truncated.
 
 The Paper instruction tells coding agents where to find the Incident Report, so an agent can investigate the failure without the user manually copying terminal output. Paper does not diagnose or fix the failure.
