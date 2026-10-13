@@ -154,6 +154,36 @@ history chain cannot detect removal of the final entries. Fencing is a
 directive, not enforcement — Paper tells the agent to work in the
 worktree; it cannot jail it there.
 
+## Scope and responsibility
+
+Paper is a witness, not an inspector. This section draws that line.
+
+**What Paper captures.** The exact command and arguments, its exit code or
+terminating signal (plus the fixed one-line `probable_cause` hint derived
+from the signal), its stdout/stderr, the working directory, a timestamp,
+and git state: HEAD plus a fingerprint of uncommitted changes. Nothing
+else.
+
+**What Paper never does.**
+
+- Inspect beyond what the OS reports about the child process: no `dmesg`,
+  no `/proc`, no environment scraping, no core dumps.
+- Touch the network: zero network primitives, zero telemetry — verifiable
+  per the bundle audit above.
+- Direct the agent's investigation.
+- Take remediation actions.
+
+**Where responsibility sits.** The agent is the inspector; Paper is the
+witness. What the agent does after reading the Incident Report — which
+files it reads, what it runs, whether it remediates — is between the user
+and the agent, not Paper. Paper's managed instruction block directs the
+agent to stop before acting without explicit approval, but enforcement
+belongs to the agent harness, not Paper.
+
+**What is provable.** The HMAC receipt seals exactly what was captured —
+or, with `--redact`, exactly what the agent was allowed to see. An auditor
+can prove what the agent was given, and what it wasn't.
+
 ## Reporting a vulnerability
 
 Found a bug or a security issue? Email **varmanvishnu96@gmail.com** or post
