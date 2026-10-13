@@ -48,7 +48,7 @@ No step in this flow opens a socket.
 
 Paper does not diagnose or fix failures. The coding agent reads the Incident Report; it never writes it. The report is produced by the wrapper at the OS boundary, outside the agent's control.
 
-This separation matters because agent-written logs are not reliable evidence: October 2026 security research (Adversa's agent vulnerability roundup) documents coding agents deleting or altering their own execution traces without monitor detection. Paper's log is produced out-of-band, so prompt manipulation or context pollution cannot alter it.
+This separation matters because agent-written logs are not reliable evidence: Adversa AI's October 2026 coding-agent security roundup documents agents deleting or altering their own execution traces without monitor detection ([Adversa AI, "AI coding agent vulnerabilities, October 2026: GitSpawn and more," October 2026](https://adversa.ai/blog/top-ai-coding-agent-security-resources-october-2026/)). Paper's log is produced out-of-band, so prompt manipulation or context pollution cannot alter it.
 
 The integrity guarantee is cryptographic. A plain hash would be forgeable by anyone able to edit the file and recompute it, so receipts use HMAC-SHA256 under a machine-local key held outside the repository workspace. Forgery requires the key. Per-field hashes identify which field changed.
 
