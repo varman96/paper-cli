@@ -79,10 +79,13 @@ If the command works, you're done.
 
 - `paper run <command> [args...]` — run a target command through Paper and capture a report if it fails.
 
+- `paper run --read [paths] -- <command>` — grant Paper permission to read the run's failing test source files (pytest first, JUnit fallback). With `[paths]`, reads exactly those files. See "v1.0.21 — Read layer" below.
+
 - `paper shelf` — move the active Incident Report out of the workspace and preserve it in Paper's local shelf.
 
 -  `paper verify` — check the HMAC receipt in .paper/latest.json. Prints RECEIPT OK, or RECEIPT TAMPERED
-  (naming each altered field, e.g. stderr was modified after capture), or KEY MISSING. Exits 1 on failure.
+  (naming each altered field, e.g. stderr was modified after capture), KEY MISSING, KEY UNTRUSTED,
+  ROTATION CHAIN BROKEN, or READ SCOPE EXCEEDED. Exits 1 on failure.
 
 -  `paper verify --chain` — walk .paper/history.jsonl and verify every link and HMAC. 
   Prints CHAIN OK (n entries) or the first broken entry index. Exits 1 on failure.
@@ -93,6 +96,28 @@ If the command works, you're done.
 
   
   
+
+## What's new
+
+### v1.0.17 — Pass with observations
+
+Paper now has a third CLI state. If a run exits 0 but the output matches error-like patterns, Paper writes an observation report instead of an incident report. Observations are derived annotations, never verdicts: they say "this looks off, you may want to check" without failing the run. `paper shelf` archives them in a separate section, `history.jsonl` chains every run including clean passes, and a clean pass prints NO ERRORS FOUND to stderr.
+
+### v1.0.18 — Container-robust
+
+Paper is not container-aware by design (detection would need /proc or env scraping, both rejected), but it is container-robust. As PID 1, `paper run` forwards SIGTERM, SIGINT and SIGHUP to the child and exits with the child's status, so `docker stop` no longer hangs. On a read-only filesystem Paper degrades with a labeled error while the command still runs, and with HOME unset it falls back to os.tmpdir()/Paper (0700) with a printed notice. XDG_DATA_HOME keeps receipts persistent. No new dependencies, no network calls, no new privileges.
+
+### v1.0.19 — Robotics capture
+
+Three new flags. `--timeout <s>` is a dead-man switch: exceed the limit and Paper sends SIGTERM, waits 5 seconds, then SIGKILLs the whole process group. Timed-out runs exit 124 and the receipt records the timeout. `--ros` captures the ROS2 wiring at failure time: node graph, topic list, parameters, plus a 30-second ring buffer of odometry, joint states, IMU and diagnostics, each topic hashed separately and sealed under the existing HMAC. `--redact` scrubs parameters and topic strings before hashing. `--ros --vision` is opt-in camera capture: the latest frame per camera topic is stored as a content-addressed artifact. Receipts stay backward compatible, and capture never breaks the wrapped run: if ROS2 is missing the receipt just notes it.
+
+### v1.0.20 — Key rotation and diff capture
+
+Every `paper run` now generates a fresh receipt key: the new key is written to the keyring first, then moved into place atomically, so parallel runs never clobber each other. Each rotation is appended to `rotation.log.jsonl`, HMAC-chained back to a genesis fingerprint you save once; `paper verify` walks the chain and reports `ROTATION CHAIN BROKEN` on a bad link or `KEY UNTRUSTED` when no chain exists. On failure, Paper also captures `git diff HEAD` into the report (stat in full, body capped at 150 lines with deterministic truncation). Opt out with `--no-diff` or `PAPER_NO_DIFF=1`. The diff is covered by the receipt HMAC like every other field.
+
+### v1.0.21 — Read layer
+
+`paper run --read -- <command>` grants Paper permission to read the run's failing test source files: pytest first, JUnit fallback, failing files only. `paper run --read <paths> -- <command>` names the files explicitly. The flag is the entire permission; the agent harness already obtained confirmation before execution. Every path is canonicalized and held to the granted scope (symlink escapes rejected), only regular files under 256 KB are read, each is hashed at read time, and `--redact` scrubs source before sealing. `.paper/read_receipt.md` logs the grant, every file touched with hashes, and the payload handed to the agent; its hash is stamped in `latest.json` under the HMAC. `paper verify` fails closed with `READ SCOPE EXCEEDED` if the touch log escapes the grant. No flag, no reads: default behavior is unchanged.
 
 ## Errors
 
@@ -112,6 +137,7 @@ Paper has no numeric or separately registered error-code system. Its own failure
 | `REPORT WRITE FAILED` | Writing `.paper/incident_report.md` after a target failure | Paper could not persist the Incident Report. Restore write access to the report location and run Paper again. |
 | `NO ACTIVE INCIDENT` | `paper shelf` | `.paper/incident_report.md` was not found, so no files were changed. Run `paper run <command>` first. |
 | `INCIDENT SHELF FAILED` | `paper shelf` while creating the shelf directory or moving the report | Paper could not move the report. The active report is preserved; restore access to the shelf location and run `paper shelf` again. |
+| `READ SOURCE MISSING` | `paper run --read`, when a failing test's source file was deleted before Paper read it | Paper sealed the rest of the capture and recorded the gap in `read_grant.errors`, then exited 66. The evidence is preserved; the missing file is named in the receipt. |
 | `PAPER OPERATION FAILED` | An unexpected local operation throws an unclassified error | Paper stopped before the requested operation completed. Resolve the reported local error and run Paper again. |
 
 `paper run <command>` also prints `COMMAND FAILED` when the user's command exits nonzero or is terminated by a signal. This is not a Paper error: Paper captured the user's command failure, wrote the Incident Report, and exits successfully if that write succeeds. The command's own stdout/stderr, including errors from its shell or runtime, remain command-generated evidence rather than Paper error labels.
@@ -155,3 +181,4 @@ Paper currently has no list or recovery command. `paper shelf` prints the exact 
 ## License
 
 PolyForm Shield License 1.0.0
+
