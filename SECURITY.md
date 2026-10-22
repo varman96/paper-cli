@@ -44,14 +44,30 @@ Each claim below can be checked in about ten minutes against the published packa
 4. **Receipt verification.** Every capture is sealed with an HMAC-SHA256 receipt under a machine-local key. `paper verify` recomputes the per-field hashes and the HMAC from `.paper/latest.json`, printing `RECEIPT OK` or identifying the altered field (e.g., `stderr was modified after capture`). The per-field hashes cover `signal`, `signal_code`, and `probable_cause` alongside the other captured fields, plus the `--read` fields (`test_results`, `test_source`, `read_grant`) and the `read_receipt.md` hash when the layer runs. Reproduce: modify the stored `stderr` and run `paper verify`.
 5. **Read-layer audit.** With `--read`, `paper verify` checks the touch log against the granted scope. Reproduce: hand-edit `read_grant` in `.paper/latest.json` to list a file outside the grant and run `paper verify`; expect `READ SCOPE EXCEEDED`.
 
+## Testing discipline
+
+The suite runs against the real binary: real child processes, real kills, real file I/O. Nothing is mocked.
+
+Every fix-covering test is proven red — demonstrated failing on the reverted code — before the fix ships. Passing is a side effect of correct code, never the objective.
+
+Payloads are adversarial: oversized outputs, overlapping concurrent runs, kill -9 mid-operation, symlink and FIFO attacks. The suite is time-boxed; a test that cannot pass fast fails fast.
+
+Paper is never used to test its own capture. The raw test output is the ground truth the sealed report is compared against, not the other way around.
+
+Example: the linear path-extraction scanner was differential-tested against the pattern it replaced on 5.68M inputs with zero differences.
+
+## Release integrity
+
+`npm run dist:hash` prints the SHA-256 of the shipped `dist/paper.js`; the hash is published in the release notes so installs can be checked against it. Publishing is moving to CI with Sigstore provenance from the public repository, tying the tarball cryptographically to the public commit it was built from. Paper declares zero runtime dependencies as policy: there is no transitive dependency tree to compromise.
+
 ## Data flow
 
 All processing occurs on the local machine:
 
 - `paper run <command>` executes the command locally and forwards its output. On failure, Paper writes `.paper/incident_report.md` and `.paper/latest.json` (structured fields plus the full markdown report) in the current repository. On success, nothing is written.
 - With `--read`, a failing run also writes `.paper/read_receipt.md`: the grant, every file touched with hashes, rejections, and the evidence payload handed to the agent. Its hash is stamped in `latest.json` under the HMAC. A later failed run without `--read` removes the stale receipt, since its hash no longer matches `latest.json`.
-- Each capture appends one JSON line to `.paper/history.jsonl`: timestamp, command, exit code, receipt hash, and flags. Each entry includes an HMAC of the previous entry's hash, forming a hash chain. `paper verify --chain` checks the sequence and reports the index of the first break. Appending is best-effort and never fails a run. Shelving a report does not remove its history entry.
-- The receipt key is stored at `<data dir>/receipt.key`: 32 random bytes, mode `0600`, created on first capture (`%LOCALAPPDATA%\Paper\receipt.key` on Windows; `~/.local/share/Paper/receipt.key` or `$XDG_DATA_HOME` elsewhere). Since v1.0.20 the key rotates every run: the new key is written to `<data dir>/receipt-keys/<id>` then moved into place atomically, and each rotation is logged in an append-only, HMAC-chained `rotation.log.jsonl` back to a genesis fingerprint the operator saves once. `paper verify` walks the chain; a broken link reports `ROTATION CHAIN BROKEN`. The key is machine-local: receipts do not verify on other machines, and key loss orphans old receipts (`paper verify` reports `KEY MISSING`, distinct from a tampering finding). On Windows, Node cannot set POSIX-style permissions, so `0600` is best-effort there.
+- Each capture appends one JSON line to `.paper/history.jsonl`: timestamp, command, exit code, receipt hash, and flags. Each entry carries a `run_seq` from a per-repo monotonic counter stored outside the repo, and includes an HMAC of the previous entry's hash, forming a hash chain. `paper verify --chain` checks the sequence, reports the index of the first break, and reports `RUN GAPS` for sequence numbers that never reached the history. Gaps are reported, not failed. Appending is best-effort and never fails a run. Shelving a report does not remove its history entry.
+- The receipt key is stored at `<data dir>/receipt.key`: 32 random bytes, mode `0600`, created on first capture (`%LOCALAPPDATA%\Paper\receipt.key` on Windows; `~/.local/share/Paper/receipt.key` or `$XDG_DATA_HOME` elsewhere). The location can be overridden per run with `--keyring-path <dir>` or the `PAPER_KEYRING_PATH` environment variable, which moves the key, keyring, rotation log, and run counters together. If `paper run` has no terminal and the key would fall back to the temp directory, it refuses with `EPHEMERAL KEYRING` before starting the command: receipts no one can verify later are worse than no run at all. Since v1.0.20 the key rotates every run: the new key is written to `<data dir>/receipt-keys/<id>` then moved into place atomically, and each rotation is logged in an append-only, HMAC-chained `rotation.log.jsonl` back to a genesis fingerprint the operator saves once. `paper verify` walks the chain; a broken link reports `ROTATION CHAIN BROKEN`. The key is machine-local: receipts do not verify on other machines, and key loss orphans old receipts (`paper verify` reports `KEY MISSING`, distinct from a tampering finding). On Windows, Node cannot set POSIX-style permissions, so `0600` is best-effort there.
 - `paper run --fence` (opt-in) creates a git worktree at `.paper/scratch` on failure, directing diagnosis off the main tree; `paper shelf` removes it. Fencing does not block capture. With `--read`, source files are read from the tree the command ran in, not the worktree.
 - `paper shelf` moves the active report out of the repository to the local shelf (`%LOCALAPPDATA%\Paper\shelf\` on Windows; `$XDG_DATA_HOME/Paper/shelf/` or `~/.local/share/Paper/shelf/` elsewhere). Reports do not leave the disk they were written to. `paper shelf` also removes `.paper/read_receipt.md` with the report.
 - Paper adds or updates a managed workflow block in the repository's agent-instruction file (e.g., `AGENTS.md`) so coding agents can locate the report. This is local file I/O only. With `--read`, the block also carries the file-touch record; a later run without the flag restores the base block byte-for-byte.
@@ -62,6 +78,7 @@ No step in this flow opens a socket.
 
 - Paper refuses to write through symbolic links. If `.paper`, the report path, or an instruction file resolves to a symlink, Paper aborts instead of following it.
 - `.paper/latest.json` is written atomically (temporary file plus rename). A crash mid-write cannot produce a partial artifact that `paper verify` would accept.
+- Path extraction from captured stderr runs in linear time. The previous pattern backtracked catastrophically on long runs of path-like characters (300KB of such output stalled capture for ~111s); the replacement scanner handles the same input in ~15ms and was differential-tested against the old pattern on 5.68M inputs with zero differences.
 - The managed instruction block is confined to its fenced section (`<!-- paper:start -->` … `<!-- paper:end -->`) in agent-instruction files. Content outside the fence is left byte-identical.
 
 ## Evidence integrity
@@ -72,9 +89,11 @@ This separation matters because agent-written logs are not reliable evidence: Ad
 
 The integrity guarantee is cryptographic. A plain hash would be forgeable by anyone able to edit the file and recompute it, so receipts use HMAC-SHA256 under a machine-local key held outside the repository workspace. Forgery requires the key. Per-field hashes identify which field changed.
 
+The design is public and the security does not depend on it staying unread. Kerckhoffs's principle holds: everything except the keys may be known to an attacker. What must stay secret is key material, never the design.
+
 Where `--redact` is enabled, the HMAC covers the stored (redacted) output, including redacted test source under `--read`: the same content the agent ingested. An auditor can therefore establish that the agent saw only the scrubbed version.
 
-Limitations: a process with shell access could deliberately locate the key outside the workspace; the protection assumes deliberate exfiltration effort rather than accidental edits. Key loss orphans old receipts. The history chain cannot detect removal of trailing entries. Fencing directs the agent to the worktree but cannot enforce it. Full machine compromise (attacker reads all keys, past and present) remains outside the model.
+Limitations: a process with shell access could deliberately locate the key outside the workspace; the protection assumes deliberate exfiltration effort rather than accidental edits. Key loss orphans old receipts. The history chain cannot detect removal of trailing entries. Fencing directs the agent to the worktree but cannot enforce it. Full machine compromise (attacker reads all keys, past and present) remains outside the model. Paper offers no protection against a compromised Paper binary or a compromised Node runtime. Local `paper verify` is a self-diagnostic for internal consistency, not trust: verification that matters happens off the machine, holding the public key, because verification on a compromised machine is theater. In general, software cannot bootstrap trust on hostile hardware. Paper proves what the machine reported, and seals how much the machine was worth trusting.
 
 ## Scope and responsibility
 
@@ -98,6 +117,7 @@ Report bugs or security issues to **varmanvishnu96@gmail.com** or the **#bugs** 
 - *v1.0.16 (2026-10-13): bundle re-audited: zero matches for the same network primitives; signal fields (`signal`, `signal_code`, `probable_cause`) added to receipt coverage. Bundle ~27 KB.*
 - *v1.0.20 (2026-10-20): key rotation shipped. Rotation log chain verified: genesis fingerprint recorded once, each rotation HMAC-linked to the previous key, `paper verify` walks to genesis. `ROTATION CHAIN BROKEN` and `KEY UNTRUSTED` outcomes tested.*
 - *v1.0.21 (2026-10-21): read layer shipped. Bundle re-audited: zero matches for the same network primitives; new module `scripts/read-layer.js` uses `node:` builtins only. `READ SCOPE EXCEEDED` tested against a tampered touch log; `read_receipt.md` hash verified against `latest.json`.*
+- *(unreleased): keyring hardening and capture-integrity instrumentation. `--keyring-path` / `PAPER_KEYRING_PATH` overrides the key location; headless runs that would fall back to the temp dir refuse with `EPHEMERAL KEYRING`. Per-repo monotonic `run_seq` sealed in `latest.json` and history entries; `verify --chain` reports `RUN GAPS` for sequence numbers that never arrived. `npm run dist:hash` prints the SHA-256 of `dist/paper.js` for release notes. `latest.json` writes atomically (temp, fsync, rename) with retry on Windows sharing violations. Windows data dir moved to `%LOCALAPPDATA%\Paper` with a locked migration. Path-extraction regex replaced with a linear-time scanner (ReDoS: 300KB of path-like stderr took 111s, now ~15ms); differential-tested on 5.68M inputs with zero differences, regression test caps the scan at 20s.*
 
 *Re-audit on each release with the command above.*
 
